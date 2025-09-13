@@ -26,21 +26,3 @@
  * 1) DWIDTH-wide result res_o
  */
 
-module three_stage_pipeline #(
-parameter int DWIDTH = 8)(
-        input logic clk,
-        input logic rst,
-        input logic [DWIDTH-1:0] op1_i,
-        input logic [DWIDTH-1:0] op2_i,
-        output logic [DWIDTH-1:0] res_o
-    );
-
-    /*
-     * Process definitions to be filled by
-     * student below...
-     * [HINT] Instantiate the alu and reg_rst modules
-     * and set up the necessary connections
-     *
-     */
-
-endmodule: three_stage_pipeline
