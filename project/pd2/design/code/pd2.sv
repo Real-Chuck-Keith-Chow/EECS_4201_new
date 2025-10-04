@@ -15,6 +15,13 @@ module pd2 #(
     input logic reset
 );
 
+
+    control #()control1();
+    decode #()decode1();
+    igen #()igen1();
+    memory #()memory1();
+    
+    
  /*
   * Instantiate other submodules and
   * probes. To be filled by student...
