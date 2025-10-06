@@ -22,35 +22,28 @@
  */
 
 module igen (
-    input logic [6:0] opcode_i,
-    output logic [31:0] imm_o
+  input  logic [31:0] insn_i,
+  input  logic [6:0]  opcode_i,
+  output logic [31:0] imm_o
 );
-    /*
-     * Process definitions to be filled by
-     * student below...
-     */
-     always_comb begin
-        case (opcode_i)
-             // I-type instructions (OP-IMM, LOAD, JALR)
-            7'b0010011,  // OP-IMM
-            7'b0000011,  // LOAD
-            7'b1100111:  // JALR
-                imm_o = 32'h00000005;  // Simple test value for now
+  logic [31:0] imm_i, imm_s, imm_b, imm_u, imm_j;
+  assign imm_i = {{20{insn_i[31]}}, insn_i[31:20]};
+  assign imm_s = {{20{insn_i[31]}}, insn_i[31:25], insn_i[11:7]};
+  assign imm_b = {{19{insn_i[31]}}, insn_i[31], insn_i[7], insn_i[30:25], insn_i[11:8], 1'b0};
+  assign imm_u = {insn_i[31:12], 12'b0};
+  assign imm_j = {{11{insn_i[31]}}, insn_i[31], insn_i[19:12], insn_i[20], insn_i[30:21], 1'b0};
 
-            // S-type instructions (STORE)
-            7'b0100011:  // STORE
-                imm_o = 32'h00000008;  // Simple test value
+  always_comb begin
+    unique case (opcode_i)
+      7'b0010011, 7'b0000011, 7'b1100111: imm_o = imm_i; // OP-IMM, LOAD, JALR
+      7'b0100011:                         imm_o = imm_s; // STORE
+      7'b0110111, 7'b0010111:             imm_o = imm_u; // LUI, AUIPC
+      7'b1101111:                         imm_o = imm_j; // JAL
+      7'b1100011:                         imm_o = imm_b; // BRANCH
+      default:                            imm_o = 32'b0;
+    endcase
+  end
+endmodule
 
-            // U-type instructions (LUI, AUIPC)
-            7'b0110111,  // LUI
-            7'b0010111:  // AUIPC
-                imm_o = 32'h12345000;  // Simple test value
-
-            // Default case
-            default:
-                imm_o = 32'b0;
-        endcase
-    end
-endmodule : igen
 
 
