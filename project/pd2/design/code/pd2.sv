@@ -101,9 +101,12 @@ module pd2 #(
     // Immediate generator
     igen imm_gen (
         .opcode_i(d_opcode),
-        .imm_o()  // Will connect to control later
+        .imm_o(igen_imm)  // Will connect to control later
     );
-
+    // Drive the decode-stage imm probe from igen for now
+`ifdef PROBE_D_IMM
+    assign D_IMM = igen_imm;      // <-- So the probe is not stuck at 0
+`endif
         // Connect probe outputs
 `ifdef PROBE_F_PC
     assign F_PC = f_pc;
