@@ -8,7 +8,7 @@
  * 1) clk
  * 2) reset signal
  */
-
+`include "probes.svh"
 module pd2 #(
     parameter int AWIDTH = 32,
     parameter int DWIDTH = 32)(
