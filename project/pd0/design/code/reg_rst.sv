@@ -25,5 +25,8 @@ module reg_rst #(
      * Process definitions to be filled by
      * student below...
      */
-
+    always_ff @(posedge clk) begin
+      out_o <= (rst == 1) ? {DWIDTH{1'b0}} : in_i;
+    end
 endmodule: reg_rst
+
