@@ -4,17 +4,17 @@
 `define PROBE_ASSIGN_XOR_RES assign_xor_res
 
 // Define other probes as required....
-// `define PROBE_ALU_OP1 // ??
-// `define PROBE_ALU_OP2 // ??
-// `define PROBE_ALU_RES // ??
-// `define PROBE_ALU_SEL // ??
+`define PROBE_ALU_OP1 alu_op1   
+`define PROBE_ALU_OP2 alu_op2 
+`define PROBE_ALU_RES alu_res 
+`define PROBE_ALU_SEL alu_sel
 
-// `define PROBE_REG_IN  // ??
-// `define PROBE_REG_OUT // ??
+`define PROBE_REG_IN reg_rst_inp 
+`define PROBE_REG_OUT reg_rst_out 
 
-// `define PROBE_TSP_OP1 // ??
-// `define PROBE_TSP_OP2 // ??
-// `define PROBE_TSP_RES // ??
+`define PROBE_TSP_OP1 tsp_op1
+`define PROBE_TSP_OP2 tsp_op2 
+`define PROBE_TSP_RES tsp_out 
 // ----  Probes  ----
 
 // ----  Top module  ----
