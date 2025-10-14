@@ -20,25 +20,24 @@ module fetch #(
 	// inputs
 	input logic clk,
 	input logic rst,
+  //input logic [DWIDTH - 1:0] insn_i, //instruction input from memory, can we consolidate this
 	// outputs	
 	output logic [AWIDTH - 1:0] pc_o,
-    output logic [DWIDTH - 1:0] insn_o
+  output logic [DWIDTH - 1:0] insn_o
 );
+    
     /*
      * Process definitions to be filled by
      * student below...
      */
-    
-    logic [AWIDTH - 1:0] pc;
-      
-    always_ff @(posedge clk) begin 
-        if (rst) begin
-            pc <= BASEADDR;
-        end else begin
-            pc <= pc + 32'd4;
-        end
-    end
-       
-	assign pc_o = pc;
 
+    always_ff @(posedge clk) begin
+      if(rst) begin                //reset signal is sent, reset program counter, and instruction output to undef.
+        pc_o <= AWIDTH'(BASEADDR);
+      end
+      else begin
+        pc_o <= pc_o + AWIDTH'(32'd4);//otherwise increment program counter by 4 for next instruction
+      end
+    end
 endmodule : fetch
+
