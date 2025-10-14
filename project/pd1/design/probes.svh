@@ -1,29 +1,16 @@
-`include "probes.svh"
+// ----  Probes  ----
+`define PROBE_ADDR      f_pc      //connection where pc_o and addr_i meet
+`define PROBE_DATA_IN   data_i    //input for data in memory
+`define PROBE_DATA_OUT  data_o    //output for data in memory
+`define PROBE_READ_EN   read_en   
+`define PROBE_WRITE_EN  write_en  
 
-// Wrapper for our design defined in code/
-// This is what the testbench connects to.
-module design_wrapper (
-    input  logic clk,
-    input  logic reset,
+`define PROBE_F_PC      f_pc    //input memory address/PC 
+`define PROBE_F_INSN    f_inst  //fetch_insn_o 
 
-    // Expose memory interface to testbench
-    output logic [`DWIDTH-1:0] mem_addr,
-    output logic [`DWIDTH-1:0] mem_data_out,
-    input  logic [`DWIDTH-1:0] mem_data_in,
-    output logic               mem_read_en,
-    output logic               mem_write_en
-);
+// ----  Probes  ----
 
-    // Instantiate top-level design (pd1.sv)
-    `TOP_MODULE core (
-        .clk        (clk),
-        .rst        (reset),
+// ----  Top module  ----
+`define TOP_MODULE  pd1
+// ----  Top module  ----
 
-        .mem_addr   (mem_addr),
-        .mem_data_in(mem_data_in),
-        .mem_data_out(mem_data_out),
-        .mem_read_en(mem_read_en),
-        .mem_write_en(mem_write_en)
-    );
-
-endmodule
