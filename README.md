@@ -1,6 +1,6 @@
 # EECS-4201-project
 
-This is the main repository for YorkU's EECS 4201 course project that progressively builds a fully-pipelined 5-staged in-order RISC-V core that supports the RV32I instruction set.
+This is the main repository for a course project that progressively builds a fully-pipelined 5-staged in-order RISC-V core that supports the RV32I instruction set.
 SystemVerilog is the hardware descriptive language (HDL) used to implement the core.
 
 ## Project structure
@@ -27,13 +27,14 @@ The below steps have been tested on a EA linux machine provided by the departmen
 ------------------------------------
 Open a terminal and execute the following command:
 ```
-git clone git@github.com:akaushikyu/EECS-4201-project.git
+git clone https://github.com/Real-Chuck-Keith-Chow/EECS_4201_new.git
+
 ```
-You should see a directory named `EECS-4201-project` in your current working directory.
+You should see a directory named `EECS_4201_new` in your current working directory.
 
 ### Step 2: Setup the environment
 ------------------------------------
-Step into the `EECS-4201-project` and execute the following command: 
+Step into the `EECS_4201_new` and execute the following command: 
 ```
 source env.sh
 ```
@@ -144,7 +145,7 @@ In addition to the provided debugging utilities, the following online tools may 
 
 ### Step 5: Submitting your design
 ------------------------------------
-Once you have validated your design against the tests in `pd*/verif/data/test*.x`, you are ready to submit your design. 
+Once you have validated your design against the tests in `pd*/verif/data/test*.x`, you are ready to upload your design. 
 To create a zip file, you can execute the following command:
 ```
 make package -C verif/scripts/ VSIM=1 PD=<name of PD> TEAM=<team-name>
@@ -156,17 +157,7 @@ make package -C verif/scripts/ VSIM=1 PD=pd3 TEAM=riscy
 ```
 This will create `package.vsim.pd3.riscy.tar.gz` that you will upload in EClass.
 
-### Grading scheme
-------------------------------------
-For each PD, you will be evaluated on the following components:
-
-|Component|Weight|
-|---------|------|
-|Code quality|25%|
-|Correctness| 75%|
-
-For code quality, please adhere to the programming styles and guidelines described [here](https://www.systemverilog.io/verification/styleguide/)
 
 ### Acknowledgements
 ------------------------------------
-This course project is inspired by UWaterloo's ECE 429/320/621 course project structure. 
+This project is inspired by UWaterloo's ECE 429/320/621 course project structure. 
