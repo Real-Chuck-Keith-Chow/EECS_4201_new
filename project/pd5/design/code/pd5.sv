@@ -15,10 +15,8 @@ module pd5 #(
     input logic reset
 );
 
-    
     // Wire declarations for probe signals
 
-    
     // Fetch stage probes
     logic [AWIDTH-1:0] probe_f_pc;
     logic [DWIDTH-1:0] probe_f_insn;
@@ -453,7 +451,8 @@ module pd5 #(
     // EX Stage: Execute
     
     // Forwarding MUX for RS1 (just a tiny mux tree)
-    always_comb begin
+    always_comb begin : forward_rs1_mux
+        // Prefer EX/MEM data when legal, otherwise fall back to WB or original reg.
         case (forward_a)
             FWD_EX_MEM: ex_forwarded_rs1 = mem_forward_data;
             FWD_MEM_WB: ex_forwarded_rs1 = wb_write_data;
@@ -462,7 +461,8 @@ module pd5 #(
     end
     
     // Forwarding MUX for RS2 (same idea)
-    always_comb begin
+    always_comb begin : forward_rs2_mux
+        // Same priority scheme for rs2.
         case (forward_b)
             FWD_EX_MEM: ex_forwarded_rs2 = mem_forward_data;
             FWD_MEM_WB: ex_forwarded_rs2 = wb_write_data;
@@ -495,7 +495,8 @@ module pd5 #(
     assign ex_branch_taken = branch_cmp_result;
     
     // Branch/Jump target calculation
-    always_comb begin
+    always_comb begin : branch_target_calc
+        // JALR needs the LSB cleared, everything else already came from the ALU.
         if (ex_jalr) begin
             // JALR: target = (rs1 + imm) & ~1
             ex_branch_target = (ex_forwarded_rs1 + ex_imm) & ~32'b1;
@@ -629,7 +630,8 @@ module pd5 #(
     end
     
     // hazard unit just checks for load-use and hollers
-    always_comb begin
+    always_comb begin : load_use_detector
+        // default to "no stall" and only flip when the next insn needs the load.
         load_use_hazard = 1'b0;
         
         // Check if EX stage has a load and ID stage uses its result
