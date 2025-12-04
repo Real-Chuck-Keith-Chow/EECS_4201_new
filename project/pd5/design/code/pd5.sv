@@ -15,9 +15,9 @@ module pd5 #(
     input logic reset
 );
 
-    // ========================================================================
+    
     // Wire declarations for probe signals
-    // ========================================================================
+
     
     // Fetch stage probes
     logic [AWIDTH-1:0] probe_f_pc;
@@ -57,9 +57,7 @@ module pd5 #(
     logic [4:0] probe_w_destination;
     logic [DWIDTH-1:0] probe_w_data;
 
-    // ========================================================================
     // Pipeline control signals
-    // ========================================================================
     logic stall_if;           // Stall IF stage
     logic stall_id;           // Stall ID stage
     logic flush_id;           // Flush ID stage (insert bubble)
@@ -71,22 +69,16 @@ module pd5 #(
     logic [1:0] forward_br_a; // Forwarding for branch comparator A
     logic [1:0] forward_br_b; // Forwarding for branch comparator B
 
-    // ========================================================================
     // IF Stage Signals
-    // ========================================================================
     logic [AWIDTH-1:0] if_pc;
     logic [AWIDTH-1:0] if_pc_next;
     logic [DWIDTH-1:0] if_insn;
     
-    // ========================================================================
     // IF/ID Pipeline Register
-    // ========================================================================
     reg [AWIDTH-1:0] id_pc;
     reg [DWIDTH-1:0] id_insn;
     
-    // ========================================================================
     // ID Stage Signals
-    // ========================================================================
     // Decoded instruction fields
     logic [6:0] id_opcode;
     logic [4:0] id_rd;
@@ -114,9 +106,7 @@ module pd5 #(
     logic [DWIDTH-1:0] id_rs1_data;
     logic [DWIDTH-1:0] id_rs2_data;
     
-    // ========================================================================
     // ID/EX Pipeline Register
-    // ========================================================================
     reg [AWIDTH-1:0] ex_pc;
     reg [DWIDTH-1:0] ex_rs1_data;
     reg [DWIDTH-1:0] ex_rs2_data;
@@ -139,9 +129,7 @@ module pd5 #(
     reg ex_jalr;
     reg [6:0] ex_opcode;
     
-    // ========================================================================
     // EX Stage Signals
-    // ========================================================================
     logic [DWIDTH-1:0] ex_alu_operand_a;
     logic [DWIDTH-1:0] ex_alu_operand_b;
     logic [DWIDTH-1:0] ex_alu_result;
@@ -150,9 +138,7 @@ module pd5 #(
     logic [DWIDTH-1:0] ex_forwarded_rs1;
     logic [DWIDTH-1:0] ex_forwarded_rs2;
     
-    // ========================================================================
     // EX/MEM Pipeline Register
-    // ========================================================================
     reg [AWIDTH-1:0] mem_pc;
     reg [DWIDTH-1:0] mem_alu_result;
     reg [DWIDTH-1:0] mem_rs2_data;
@@ -165,17 +151,15 @@ module pd5 #(
     reg [1:0] mem_wb_src;
     reg [6:0] mem_opcode;
     
-    // ========================================================================
     // MEM Stage Signals
-    // ========================================================================
     logic [DWIDTH-1:0] mem_read_data;
     logic [1:0] mem_size;
     logic mem_sign_extend;
     logic [DWIDTH-1:0] mem_store_data;
+    logic [DWIDTH-1:0] mem_forward_data;  // Value to use when forwarding from MEM stage
+    logic [AWIDTH-1:0] mem_pc_plus4;       // Used for JAL/JALR forwarding
     
-    // ========================================================================
     // MEM/WB Pipeline Register
-    // ========================================================================
     reg [AWIDTH-1:0] wb_pc;
     reg [DWIDTH-1:0] wb_alu_result;
     reg [DWIDTH-1:0] wb_mem_data;
@@ -183,14 +167,10 @@ module pd5 #(
     reg wb_reg_write;
     reg [1:0] wb_wb_src;
     
-    // ========================================================================
     // WB Stage Signals
-    // ========================================================================
     logic [DWIDTH-1:0] wb_write_data;
     
-    // ========================================================================
     // Memory instance for instruction fetch (read-only)
-    // ========================================================================
     logic [DWIDTH-1:0] data_out;  // For instruction fetch
     
     memory #(
@@ -210,9 +190,7 @@ module pd5 #(
     
     assign data_out = if_insn;  // For program termination logic
     
-    // ========================================================================
     // Data Memory instance
-    // ========================================================================
     memory #(
         .DWIDTH(DWIDTH),
         .AWIDTH(AWIDTH)
@@ -228,26 +206,50 @@ module pd5 #(
         .data_o(mem_read_data)
     );
     
-    // ========================================================================
     // Register File instance
-    // ========================================================================
+    logic [DWIDTH-1:0] rf_rs1_data;      // Register file output (with write-first bypass)
+    logic [DWIDTH-1:0] rf_rs2_data;      // Register file output (with write-first bypass)
+    logic [DWIDTH-1:0] rf_rs1_data_raw;  // Raw register file output (for probes)
+    logic [DWIDTH-1:0] rf_rs2_data_raw;  // Raw register file output (for probes)
+    
     register_file #(
         .DWIDTH(DWIDTH)
     ) register_file_0 (
         .clk(clk),
         .rst(reset),
         .rs1_addr_i(id_rs1),
-        .rs1_data_o(id_rs1_data),
+        .rs1_data_o(rf_rs1_data),
         .rs2_addr_i(id_rs2),
-        .rs2_data_o(id_rs2_data),
+        .rs2_data_o(rf_rs2_data),
+        .rs1_data_raw_o(rf_rs1_data_raw),
+        .rs2_data_raw_o(rf_rs2_data_raw),
         .write_en_i(wb_reg_write),
         .rd_addr_i(wb_rd),
         .rd_data_i(wb_write_data)
     );
     
-    // ========================================================================
+    // WB-to-ID Forwarding (Internal Register File Bypass)
+    // If WB is writing to the same register that ID is reading, bypass the
+    // stale register file value and use the new value from WB directly.
+    // This handles the case where reg file write (sequential) hasn't completed
+    // but we need the new value in ID (combinational read).
+    always_comb begin
+        // RS1 bypass
+        if (wb_reg_write && (wb_rd != 5'b0) && (wb_rd == id_rs1)) begin
+            id_rs1_data = wb_write_data;
+        end else begin
+            id_rs1_data = rf_rs1_data;
+        end
+        
+        // RS2 bypass
+        if (wb_reg_write && (wb_rd != 5'b0) && (wb_rd == id_rs2)) begin
+            id_rs2_data = wb_write_data;
+        end else begin
+            id_rs2_data = rf_rs2_data;
+        end
+    end
+    
     // Instruction Decoder instance
-    // ========================================================================
     decode decoder (
         .insn_i(id_insn),
         .opcode_o(id_opcode),
@@ -259,9 +261,7 @@ module pd5 #(
         .shamt_o(id_shamt)
     );
     
-    // ========================================================================
     // Control Unit instance
-    // ========================================================================
     control ctrl (
         .opcode_i(id_opcode),
         .funct3_i(id_funct3),
@@ -279,18 +279,14 @@ module pd5 #(
         .imm_type_o(id_imm_type)
     );
     
-    // ========================================================================
     // Immediate Generator instance
-    // ========================================================================
     igen imm_gen (
         .insn_i(id_insn),
         .imm_type_i(id_imm_type),
         .imm_o(id_imm)
     );
     
-    // ========================================================================
     // ALU instance
-    // ========================================================================
     execute alu (
         .alu_op_i(ex_alu_op),
         .operand_a_i(ex_alu_operand_a),
@@ -299,9 +295,7 @@ module pd5 #(
         .alu_result_o(ex_alu_result)
     );
     
-    // ========================================================================
     // Branch Comparator instance
-    // ========================================================================
     logic branch_cmp_result;
     branch_control br_ctrl (
         .funct3_i(ex_funct3),
@@ -311,9 +305,7 @@ module pd5 #(
         .branch_taken_o(branch_cmp_result)
     );
     
-    // ========================================================================
     // Writeback MUX instance
-    // ========================================================================
     writeback wb_mux (
         .pc_i(wb_pc),
         .alu_res_i(wb_alu_result),
@@ -322,11 +314,9 @@ module pd5 #(
         .writeback_data_o(wb_write_data)
     );
     
-    // ========================================================================
     // IF Stage: Fetch
-    // ========================================================================
     
-    // PC Register
+    // keep the PC moving unless reset or stall kicks in
     always_ff @(posedge clk) begin
         if (reset) begin
             if_pc <= PC_START;
@@ -335,7 +325,7 @@ module pd5 #(
         end
     end
     
-    // Next PC logic
+    // cheap next-PC chooser (branch wins, otherwise just +4)
     always_comb begin
         if (ex_branch_taken || ex_jump) begin
             if_pc_next = ex_branch_target;
@@ -344,9 +334,8 @@ module pd5 #(
         end
     end
     
-    // ========================================================================
     // IF/ID Pipeline Register
-    // ========================================================================
+    // stash fetched insn unless flushed/stalled
     always_ff @(posedge clk) begin
         if (reset) begin
             id_pc <= 32'b0;  // Bubble: PC=0 on reset
@@ -362,9 +351,8 @@ module pd5 #(
         // If stalled or flushed, id_pc holds current value
     end
     
-    // ========================================================================
     // ID/EX Pipeline Register
-    // ========================================================================
+    // lots of bookkeeping here; keep the values flowing forward
     always_ff @(posedge clk) begin
         if (reset) begin
             // Reset: all zeros including PC and opcode
@@ -413,6 +401,30 @@ module pd5 #(
             ex_jump <= 1'b0;
             ex_jalr <= 1'b0;
             ex_opcode <= 7'b0010011;  // NOP opcode (I-type ALU)
+        end else if (stall_id) begin
+            // Load-use stall: insert bubble into EX (instruction stays in ID)
+            // Bubble is a NOP with no side effects
+            ex_pc <= id_pc;  // Show stalled instruction's PC for debugging
+            ex_rs1_data <= 32'b0;
+            ex_rs2_data <= 32'b0;
+            ex_imm <= 32'b0;
+            ex_rd <= 5'b0;           // No destination
+            ex_rs1 <= 5'b0;
+            ex_rs2 <= 5'b0;
+            ex_funct3 <= 3'b0;
+            ex_funct7 <= 7'b0;
+            ex_shamt <= 5'b0;
+            ex_alu_op <= ALU_ADD;
+            ex_alu_src1 <= ALU_SRC_ZERO;
+            ex_alu_src2 <= ALU_SRC_ZERO;
+            ex_reg_write <= 1'b0;    // No register write for stall bubble
+            ex_mem_read <= 1'b0;
+            ex_mem_write <= 1'b0;
+            ex_wb_src <= WB_SRC_ALU;
+            ex_branch <= 1'b0;
+            ex_jump <= 1'b0;
+            ex_jalr <= 1'b0;
+            ex_opcode <= 7'b0010011;  // NOP opcode
         end else begin
             ex_pc <= id_pc;
             ex_rs1_data <= id_rs1_data;
@@ -438,23 +450,21 @@ module pd5 #(
         end
     end
     
-    // ========================================================================
     // EX Stage: Execute
-    // ========================================================================
     
-    // Forwarding MUX for RS1
+    // Forwarding MUX for RS1 (just a tiny mux tree)
     always_comb begin
         case (forward_a)
-            FWD_EX_MEM: ex_forwarded_rs1 = mem_alu_result;
+            FWD_EX_MEM: ex_forwarded_rs1 = mem_forward_data;
             FWD_MEM_WB: ex_forwarded_rs1 = wb_write_data;
             default:    ex_forwarded_rs1 = ex_rs1_data;
         endcase
     end
     
-    // Forwarding MUX for RS2
+    // Forwarding MUX for RS2 (same idea)
     always_comb begin
         case (forward_b)
-            FWD_EX_MEM: ex_forwarded_rs2 = mem_alu_result;
+            FWD_EX_MEM: ex_forwarded_rs2 = mem_forward_data;
             FWD_MEM_WB: ex_forwarded_rs2 = wb_write_data;
             default:    ex_forwarded_rs2 = ex_rs2_data;
         endcase
@@ -495,9 +505,8 @@ module pd5 #(
         end
     end
     
-    // ========================================================================
     // EX/MEM Pipeline Register
-    // ========================================================================
+    // capture ALU results heading into MEM
     always_ff @(posedge clk) begin
         if (reset) begin
             mem_pc <= 32'b0;  // Bubble: PC=0 on reset
@@ -526,11 +535,10 @@ module pd5 #(
         end
     end
     
-    // ========================================================================
     // MEM Stage: Memory Access
-    // ========================================================================
     
     // Memory size encoding from funct3
+    // figure out store data size the casual way
     always_comb begin
         case (mem_funct3[1:0])
             2'b00: mem_size = 2'b00;  // Byte
@@ -545,6 +553,7 @@ module pd5 #(
     
     // Store data forwarding (WB -> MEM for store after load)
     // Forward from WB to MEM when store's rs2 matches WB's rd
+    // store data forwarding (mainly for WB -> MEM), nothing fancy
     always_comb begin
         if (mem_mem_write && wb_reg_write && (wb_rd != 5'b0) && (wb_rd == mem_rs2)) begin
             // Forward from WB to store data
@@ -553,10 +562,21 @@ module pd5 #(
             mem_store_data = mem_rs2_data;
         end
     end
+
+    // Precompute PC+4 once for MEM stage (needed for JAL/JALR forwarding)
+    assign mem_pc_plus4 = mem_pc + 32'd4;
+
+    // Select the actual value that will be written back from MEM stage.
+    // Non-load instructions can be forwarded directly to EX/branch compare.
+    always_comb begin
+        case (mem_wb_src)
+            WB_SRC_PC4: mem_forward_data = mem_pc_plus4;
+            default:    mem_forward_data = mem_alu_result;
+        endcase
+    end
     
-    // ========================================================================
     // MEM/WB Pipeline Register
-    // ========================================================================
+    // final latch before writeback happens
     always_ff @(posedge clk) begin
         if (reset) begin
             wb_pc <= 32'b0;  // Bubble: PC=0 on reset
@@ -575,9 +595,7 @@ module pd5 #(
         end
     end
     
-    // ========================================================================
     // Hazard Detection Unit (Load-Use Stall)
-    // ========================================================================
     logic load_use_hazard;
     
     // Determine if ID stage instruction uses rs1 and/or rs2
@@ -585,6 +603,7 @@ module pd5 #(
     logic id_uses_rs1;
     logic id_uses_rs2;
     
+    // quick and dirty decoding of who actually uses rs1/rs2
     always_comb begin
         // Default: assume both are used
         id_uses_rs1 = 1'b1;
@@ -609,6 +628,7 @@ module pd5 #(
         endcase
     end
     
+    // hazard unit just checks for load-use and hollers
     always_comb begin
         load_use_hazard = 1'b0;
         
@@ -627,12 +647,12 @@ module pd5 #(
     
     // Flush signals
     // On branch/jump: flush both IF/ID and ID/EX
+    // Note: load_use_hazard uses stall_id to insert a stall bubble (reg_write=0)
+    //       branch/jump uses flush_ex to insert a flush bubble (reg_write=1, rd=0)
     assign flush_id = ex_branch_taken || ex_jump;  // Flush IF/ID on branch/jump
-    assign flush_ex = load_use_hazard || ex_branch_taken || ex_jump;  // Flush ID/EX on load-use or branch/jump
+    assign flush_ex = ex_branch_taken || ex_jump;  // Flush ID/EX on branch/jump only (NOT load-use)
 
-    // ========================================================================
     // Forwarding Unit
-    // ========================================================================
     
     // Forward to EX stage ALU operand A (RS1)
     // Note: Don't forward from MEM if it's a load (mem_mem_read), because the
@@ -664,9 +684,7 @@ module pd5 #(
         end
     end
     
-    // ========================================================================
     // Probe Assignments
-    // ========================================================================
     
     // F stage probes
     assign probe_f_pc = if_pc;
@@ -686,8 +704,8 @@ module pd5 #(
     // R stage probes (register file reads - in decode stage)
     assign probe_r_read_rs1 = id_rs1;
     assign probe_r_read_rs2 = id_rs2;
-    assign probe_r_read_rs1_data = id_rs1_data;
-    assign probe_r_read_rs2_data = id_rs2_data;
+    assign probe_r_read_rs1_data = rf_rs1_data_raw;  // Show raw register file output (no bypass)
+    assign probe_r_read_rs2_data = rf_rs2_data_raw;  // Show raw register file output (no bypass)
     
     // E stage probes
     assign probe_e_pc = ex_pc;
@@ -698,8 +716,8 @@ module pd5 #(
     assign probe_m_pc = mem_pc;
     assign probe_m_address = mem_alu_result;
     assign probe_m_size_encoded = mem_size;
-    // For loads, show loaded data; for stores, show store data
-    assign probe_m_data = mem_mem_read ? mem_read_data : mem_store_data;
+    // Always show the store data (rs2 value) - for non-stores this will be the rs2 field
+    assign probe_m_data = mem_store_data;
     
     // W stage probes
     assign probe_w_pc = wb_pc;
@@ -707,9 +725,7 @@ module pd5 #(
     assign probe_w_destination = wb_rd;
     assign probe_w_data = wb_write_data;
 
-    // ========================================================================
     // Program Termination Logic
-    // ========================================================================
 reg is_program = 0;
 always_ff @(posedge clk) begin
         if (data_out == 32'h00000073) $finish;  // Terminate on ECALL
@@ -718,4 +734,3 @@ always_ff @(posedge clk) begin
 end
 
 endmodule : pd5
-
