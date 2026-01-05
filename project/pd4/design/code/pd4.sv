@@ -1,3 +1,5 @@
+import constants_pkg::*;
+
 /*
  * Module: pd4
  *
@@ -8,349 +10,258 @@
  * 2) reset signal
  */
 
-// pd4.sv
-// Single-cycle RV32I core (PD4) with probes.
-
-`include "constants.svh"
-
 module pd4 #(
-  parameter int DWIDTH = 32
-) (
-  input  logic clk,
-  input  logic reset
+    parameter int AWIDTH = ADDR_WIDTH,
+    parameter int DWIDTH = DATA_WIDTH)(
+    input logic clk,
+    input logic reset
 );
 
-  // FETCH
-  logic [31:0] f_pc, f_pc_plus_4, f_next_pc, f_insn;
+    typedef logic [DWIDTH-1:0] word_t;
 
-  fetch fetch_0 (
-    .clk       (clk),
-    .reset     (reset),
-    .next_pc   (f_next_pc),
-    .pc        (f_pc),
-    .pc_plus_4 (f_pc_plus_4)
-  );
 
-  imemory imem_0 (
-    .clock      (clk),
-    .read_write (1'b0),
-    .address    (f_pc),
-    .data_in    ('0),
-    .data_out   (f_insn)
-  );
+    //fetch stage
+    logic [AWIDTH-1:0] fetch_pc;
+    word_t fetch_insn;
+    logic [AWIDTH-1:0] next_pc;
 
-  // ECALL terminates simulation
-  always_ff @(posedge clk) begin
-    if (!reset && f_insn == INSN_ECALL)
-      $finish;
-  end
+    fetch #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH),
+        .BASEADDR(MEM_BASE_ADDR)
+    ) fetch_0 (
+        .clk(clk),
+        .rst(reset),
+        .next_pc_i(next_pc),
+        .pc_o(fetch_pc),
+        .insn_o(fetch_insn)
+    );
 
-  // DECODE
-  logic [6:0]  d_opcode;
-  logic [2:0]  d_funct3;
-  logic [6:0]  d_funct7;
-  logic [4:0]  d_rs1, d_rs2, d_rd;
-  logic [31:0] d_imm_i, d_imm_s, d_imm_b, d_imm_u, d_imm_j;
-  logic [4:0]  d_shamt;
+    //decode stage
+    logic [AWIDTH-1:0] decode_pc;
+    word_t decode_insn;
+    logic [6:0] decode_opcode;
+    logic [4:0] decode_rd;
+    logic [4:0] decode_rs1;
+    logic [4:0] decode_rs2;
+    logic [6:0] decode_funct7;
+    logic [2:0] decode_funct3;
+    logic [4:0] decode_shamt;
+    word_t decode_imm;
 
-  decode decode_0 (
-    .instr (f_insn),
+    decode #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) decode_0 (
+        .clk(clk),
+        .rst(reset),
+        .insn_i(fetch_insn),
+        .pc_i(fetch_pc),
+        .pc_o(decode_pc),
+        .insn_o(decode_insn),
+        .opcode_o(decode_opcode),
+        .rd_o(decode_rd),
+        .rs1_o(decode_rs1),
+        .rs2_o(decode_rs2),
+        .funct7_o(decode_funct7),
+        .funct3_o(decode_funct3),
+        .shamt_o(decode_shamt),
+        .imm_o(decode_imm)
+    );
 
-    .opcode (d_opcode),
-    .funct3 (d_funct3),
-    .funct7 (d_funct7),
-    .rs1    (d_rs1),
-    .rs2    (d_rs2),
-    .rd     (d_rd),
+    //control stage
+    logic pcsel;
+    logic immsel;
+    logic regwren;
+    logic rs1sel;
+    logic rs2sel;
+    logic memren;
+    logic memwren;
+    logic [1:0] wbsel;
+    logic [3:0] alusel;
 
-    .imm_i  (d_imm_i),
-    .imm_s  (d_imm_s),
-    .imm_b  (d_imm_b),
-    .imm_u  (d_imm_u),
-    .imm_j  (d_imm_j),
-    .shamt  (d_shamt)
-  );
+    control #(
+        .DWIDTH(DWIDTH)
+    ) control_0 (
+        .insn_i(decode_insn),
+        .opcode_i(decode_opcode),
+        .funct7_i(decode_funct7),
+        .funct3_i(decode_funct3),
+        .pcsel_o(pcsel),
+        .immsel_o(immsel),
+        .regwren_o(regwren),
+        .rs1sel_o(rs1sel),
+        .rs2sel_o(rs2sel),
+        .memren_o(memren),
+        .memwren_o(memwren),
+        .wbsel_o(wbsel),
+        .alusel_o(alusel)
+    );
 
-  // REGISTER FILE
-  logic [31:0] r_rs1_data, r_rs2_data;
-  logic        r_we, r_we_final;
-  logic [31:0] w_wb_data;
+    //register file
+    word_t rf_rs1_data;
+    word_t rf_rs2_data;
 
-  // instance name must be register_file_0
-  register_file #(.DWIDTH(DWIDTH)) register_file_0 (
-    .clk      (clk),
-    .rs1_addr (d_rs1),
-    .rs2_addr (d_rs2),
-    .rs1_data (r_rs1_data),
-    .rs2_data (r_rs2_data),
-    .rd_we    (r_we_final),
-    .rd_addr  (d_rd),
-    .rd_data  (w_wb_data)
-  );
+    word_t writeback_data;
 
-  // CONTROL
-  alu_op_e    e_alu_op;
-  op_a_sel_e  e_op_a_sel;
-  op_b_sel_e  e_op_b_sel;
-  wb_sel_e    w_wb_sel;
+    register_file #(
+        .DWIDTH(DWIDTH)
+    ) register_file_0 (
+        .clk(clk),
+        .rst(reset),
+        .rs1_i(decode_rs1),
+        .rs2_i(decode_rs2),
+        .rd_i(decode_rd),
+        .datawb_i(writeback_data),
+        .regwren_i(regwren),
+        .rs1data_o(rf_rs1_data),
+        .rs2data_o(rf_rs2_data)
+    );
 
-  logic       m_mem_re;
-  logic       m_mem_we;
-  mem_size_e  m_mem_size;
-  logic       m_mem_unsigned;
+    //branch control
+    logic branch_eq;
+    logic branch_lt;
 
-  br_type_e   e_br_type;
-  logic       e_do_jal, e_do_jalr;
+    branch_control #(
+        .DWIDTH(DWIDTH)
+    ) branch_control_0 (
+        .opcode_i(decode_opcode),
+        .funct3_i(decode_funct3),
+        .rs1_i(rf_rs1_data),
+        .rs2_i(rf_rs2_data),
+        .breq_o(branch_eq),
+        .brlt_o(branch_lt)
+    );
 
-  control control_0 (
-    .opcode       (d_opcode),
-    .funct3       (d_funct3),
-    .funct7       (d_funct7),
+    //execute (ALU)
+    word_t alu_op_a;
+    word_t alu_op_b;
+    word_t alu_result;
+    logic branch_taken;
 
-    .reg_we       (r_we),
-    .alu_op       (e_alu_op),
-    .op_a_sel     (e_op_a_sel),
-    .op_b_sel     (e_op_b_sel),
-    .wb_sel       (w_wb_sel),
+    assign alu_op_a = rs1sel ? decode_pc : rf_rs1_data;
+    assign alu_op_b = immsel ? decode_imm : rf_rs2_data;
 
-    .mem_re       (m_mem_re),
-    .mem_we       (m_mem_we),
-    .mem_size     (m_mem_size),
-    .mem_unsigned (m_mem_unsigned),
+    alu #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) alu_0 (
+        .pc_i(decode_pc),
+        .rs1_i(alu_op_a),
+        .rs2_i(alu_op_b),
+        .funct3_i(decode_funct3),
+        .funct7_i(decode_funct7),
+        .opcode_i(decode_opcode),
+        .alusel_i(alusel),
+        .imm_i(decode_imm),
+        .breq_i(branch_eq),
+        .brlt_i(branch_lt),
+        .res_o(alu_result),
+        .brtaken_o(branch_taken)
+    );
 
-    .br_type      (e_br_type),
-    .do_jal       (e_do_jal),
-    .do_jalr      (e_do_jalr)
-  );
 
-  assign r_we_final = (!reset) && r_we && (d_rd != 5'd0);
+    //memory signals
+    logic [1:0] mem_size;
+    logic mem_unsigned_load;
+    word_t dmem_read_data;
+    word_t dmem_probe_data;
+    logic [AWIDTH-1:0] mem_address;
 
-  // EXECUTE + BRANCH
-  logic [31:0] e_imm_sel, e_alu_result, e_next_pc;
+    assign mem_address = alu_result[AWIDTH-1:0];
 
-  always_comb begin
-    // pick imm for ALU; branch_control uses its own imm_* for PC
-    unique case (d_opcode)
-      OPCODE_LUI,
-      OPCODE_AUIPC: e_imm_sel = d_imm_u;
-      OPCODE_JAL:    e_imm_sel = d_imm_j;
-      OPCODE_JALR:   e_imm_sel = d_imm_i;
-      OPCODE_BRANCH: e_imm_sel = d_imm_b;
-      OPCODE_LOAD:   e_imm_sel = d_imm_i;
-      OPCODE_STORE:  e_imm_sel = d_imm_s;
-      OPCODE_OP_IMM: e_imm_sel = d_imm_i;
-      default:       e_imm_sel = d_imm_i;
-    endcase
-  end
-
-  execute execute_0 (
-    .pc         (f_pc),
-    .rs1_val    (r_rs1_data),
-    .rs2_val    (r_rs2_data),
-    .imm_val    (e_imm_sel),
-    .op_a_sel   (e_op_a_sel),
-    .op_b_sel   (e_op_b_sel),
-    .alu_op     (e_alu_op),
-    .alu_result (e_alu_result)
-  );
-
-  branch_control branch_control_0 (
-    .pc        (f_pc),
-    .rs1_val   (r_rs1_data),
-    .rs2_val   (r_rs2_data),
-
-    .imm_b     (d_imm_b),
-    .imm_j     (d_imm_j),
-    .imm_i     (d_imm_i),
-
-    .br_type   (e_br_type),
-    .do_jal    (e_do_jal),
-    .do_jalr   (e_do_jalr),
-
-    .next_pc   (e_next_pc)
-  );
-
-  assign f_next_pc = e_next_pc;
-
-  // semantic branch-taken flag (for probe only)
-  logic br_taken_exec;
-
-  always_comb begin
-    logic branch_cond;
-
-    branch_cond = 1'b0;
-    unique case (e_br_type)
-      BR_BEQ : branch_cond = (r_rs1_data == r_rs2_data);
-      BR_BNE : branch_cond = (r_rs1_data != r_rs2_data);
-      BR_BLT : branch_cond = ($signed(r_rs1_data) <  $signed(r_rs2_data));
-      BR_BGE : branch_cond = ($signed(r_rs1_data) >= $signed(r_rs2_data));
-      BR_BLTU: branch_cond = (r_rs1_data <  r_rs2_data);
-      BR_BGEU: branch_cond = (r_rs1_data >= r_rs2_data);
-      default: branch_cond = 1'b0;
-    endcase
-
-    br_taken_exec = branch_cond;
-  end
-
-  // MEMORY
-  logic [31:0] m_addr, m_store_data, m_load_raw;
-  logic [1:0]  m_addr_low;
-  logic [7:0]  store_byte;
-
-  assign m_addr     = e_alu_result;
-  assign m_addr_low = m_addr[1:0];
-
-  always_comb begin
-    store_byte = r_rs2_data[7:0];
-
-    unique case (m_mem_size)
-      MEM_SIZE_BYTE: begin
-        unique case (m_addr_low)
-          2'd0: store_byte = r_rs2_data[7:0];
-          2'd1: store_byte = r_rs2_data[15:8];
-          2'd2: store_byte = r_rs2_data[23:16];
-          2'd3: store_byte = r_rs2_data[31:24];
-          default: store_byte = r_rs2_data[7:0];
+    always_comb begin
+        mem_size = decode_funct3[1:0];   //default: 13:12
+        mem_unsigned_load = 1'b1;
+        unique case (decode_opcode)
+            OP_LOAD: begin
+                unique case (decode_funct3)
+                    3'b000: begin //LB
+                        mem_size = MEM_SIZE_BYTE;
+                        mem_unsigned_load = 1'b0;
+                    end
+                    3'b001: begin //LH
+                        mem_size = MEM_SIZE_HALF;
+                        mem_unsigned_load = 1'b0;
+                    end
+                    3'b010: begin //LW
+                        mem_size = MEM_SIZE_WORD;
+                        mem_unsigned_load = 1'b0;
+                    end
+                    3'b100: begin //LBU
+                        mem_size = MEM_SIZE_BYTE;
+                        mem_unsigned_load = 1'b1;
+                    end
+                    3'b101: begin //LHU
+                        mem_size = MEM_SIZE_HALF;
+                        mem_unsigned_load = 1'b1;
+                    end
+                    default: begin
+                        mem_size = MEM_SIZE_WORD;
+                        mem_unsigned_load = 1'b0;
+                    end
+                endcase
+            end
+            OP_STORE: begin
+                mem_unsigned_load = 1'b1;
+                unique case (decode_funct3)
+                    3'b000: mem_size = MEM_SIZE_BYTE; //SB
+                    3'b001: mem_size = MEM_SIZE_HALF; //SH
+                    default: mem_size = MEM_SIZE_WORD; //SW
+                endcase
+            end
+            default: begin
+                mem_size = decode_funct3[1:0];
+                mem_unsigned_load = 1'b1;
+            end
         endcase
-      end
+    end
 
-      // for HALF/WORD we still write one byte (LSByte) as per interface
-      default: store_byte = r_rs2_data[7:0];
-    endcase
-  end
+    memory #(
+        .AWIDTH(AWIDTH),
+        .DWIDTH(DWIDTH),
+        .BASE_ADDR(MEM_BASE_ADDR)
+    ) data_memory (
+        .clk(clk),
+        .rst(reset),
+        .addr_i(mem_address),
+        .data_i(rf_rs2_data),
+        .read_en_i(memren),
+        .write_en_i(memwren),
+        .size_i(mem_size),
+        .unsigned_load_i(mem_unsigned_load),
+        .data_o(dmem_read_data),
+        .probe_data_o(dmem_probe_data)
+    );
 
-  assign m_store_data = {24'b0, store_byte};
+    //write-back stage
+    writeback #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) writeback_0 (
+        .pc_i(decode_pc),
+        .alu_res_i(alu_result),
+        .memory_data_i(dmem_read_data),
+        .wbsel_i(wbsel),
+        .pcsel_i(pcsel),
+        .brtaken_i(branch_taken),
+        .writeback_data_o(writeback_data),
+        .next_pc_o(next_pc)
+    );
 
-  dmemory dmem_0 (
-    .clock      (clk),
-    .read_write (m_mem_we),
-    .address    (m_addr),
-    .data_in    (m_store_data),
-    .data_out   (m_load_raw)
-  );
+    //helper signal
+    word_t mem_stage_data;
+    assign mem_stage_data = dmem_probe_data;
 
-  logic [1:0] mem_size3;
-  always_comb begin
-    mem_size3 = MEM_SIZE_HALF; // default for non-mem instructions
+    word_t data_out;
+    assign data_out = fetch_insn;
 
-    unique case (d_opcode)
-      OPCODE_LOAD: begin
-        unique case (d_funct3)
-          FUNCT3_LB,
-          FUNCT3_LBU: mem_size3 = MEM_SIZE_BYTE;
-          FUNCT3_LH,
-          FUNCT3_LHU: mem_size3 = MEM_SIZE_HALF;
-          FUNCT3_LW:  mem_size3 = MEM_SIZE_WORD;
-          default:     mem_size3 = MEM_SIZE_BYTE;
-        endcase
-      end
+    //program termination logic
+    reg is_program = 0;
+    always_ff @(posedge clk) begin
+        if (data_out == 32'h00000073) $finish;  //ecall
+        if (data_out == 32'h00008067) is_program = 1;  //ret instruction
+        if (is_program && (register_file_0.registers[2] == 32'h01000000 + `MEM_DEPTH)) $finish;
+    end
 
-      OPCODE_STORE: begin
-        unique case (d_funct3)
-          FUNCT3_SB: mem_size3 = MEM_SIZE_BYTE;
-          FUNCT3_SH: mem_size3 = MEM_SIZE_HALF;
-          FUNCT3_SW: mem_size3 = MEM_SIZE_WORD;
-          default:   mem_size3 = MEM_SIZE_BYTE;
-        endcase
-      end
-
-      default: mem_size3 = MEM_SIZE_BYTE;
-    endcase
-  end
-
-  // WRITEBACK
-  logic [31:0] w_load_ext;
-
-  writeback writeback_0 (
-    .wb_sel        (w_wb_sel),
-    .pc_plus_4     (f_pc_plus_4),
-    .alu_result    (e_alu_result),
-    .load_data_raw (m_load_raw),
-    .mem_size      (m_mem_size),
-    .mem_unsigned  (m_mem_unsigned),
-    .addr_low      (m_addr_low),
-    .wb_data       (w_wb_data),
-    .load_data_ext (w_load_ext)
-  );
-
-  // ---------------------------------------------------------------------------
-  // PROBES
-  // ---------------------------------------------------------------------------
-
-  // Fetch
-  logic [31:0] F_PC, F_INSN;
-  assign F_PC   = f_pc;
-  assign F_INSN = f_insn;
-
-  // Decode
-  logic [31:0] D_PC, D_IMM;
-  logic [6:0]  D_OPCODE, D_FUNCT7;
-  logic [4:0]  D_RD, D_RS1, D_RS2, D_SHAMT;
-  logic [2:0]  D_FUNCT3;
-
-  assign D_PC     = f_pc;
-  assign D_OPCODE = d_opcode;
-  assign D_RD     = d_rd;
-  assign D_RS1    = d_rs1;
-  assign D_RS2    = d_rs2;
-  assign D_FUNCT3 = d_funct3;
-  assign D_FUNCT7 = d_funct7;
-  assign D_SHAMT  = d_shamt;
-
-  always_comb begin
-    unique case (d_opcode)
-      OPCODE_LUI,
-      OPCODE_AUIPC: D_IMM = d_imm_u;
-      OPCODE_JAL:    D_IMM = d_imm_j;
-      OPCODE_JALR,
-      OPCODE_LOAD,
-      OPCODE_OP_IMM: D_IMM = d_imm_i;
-      OPCODE_STORE:  D_IMM = d_imm_s;
-      OPCODE_BRANCH: D_IMM = d_imm_b;
-      default:       D_IMM = 32'b0;
-    endcase
-  end
-
-  // Regfile probes
-  logic        R_WRITE_ENABLE;
-  logic [4:0]  R_WRITE_DESTINATION;
-  logic [31:0] R_WRITE_DATA;
-  logic [4:0]  R_READ_RS1, R_READ_RS2;
-  logic [31:0] R_READ_RS1_DATA, R_READ_RS2_DATA;
-
-  assign R_WRITE_ENABLE      = (!reset) && r_we;
-  assign R_WRITE_DESTINATION = d_rd;
-  assign R_WRITE_DATA        = w_wb_data;
-  assign R_READ_RS1          = d_rs1;
-  assign R_READ_RS2          = d_rs2;
-  assign R_READ_RS1_DATA     = r_rs1_data;
-  assign R_READ_RS2_DATA     = r_rs2_data;
-
-  // Execute probes
-  logic [31:0] E_PC, E_ALU_RES;
-  logic        E_BR_TAKEN;
-
-  assign E_PC       = f_pc;
-  assign E_ALU_RES  = e_alu_result;
-  assign E_BR_TAKEN = br_taken_exec;
-
-  // Memory probes
-  logic [31:0] M_PC, M_ADDRESS, M_DATA;
-  logic [1:0]  M_SIZE_ENCODED;
-
-  assign M_PC           = f_pc;
-  assign M_ADDRESS      = m_addr;
-  assign M_DATA         = m_load_raw; // current value in D-mem at address
-  assign M_SIZE_ENCODED = mem_size3;
-
-  // Writeback probes
-  logic [31:0] W_PC, W_DATA;
-  logic        W_ENABLE;
-  logic [4:0]  W_DESTINATION;
-
-  assign W_PC          = f_pc;
-  assign W_ENABLE      = (!reset) && r_we;
-  assign W_DESTINATION = d_rd;
-  assign W_DATA        = w_wb_data;
-
-endmodule
+endmodule : pd4
