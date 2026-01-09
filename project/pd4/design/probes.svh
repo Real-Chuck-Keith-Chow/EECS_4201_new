@@ -33,10 +33,6 @@
 `define PROBE_W_ENABLE            regwren
 `define PROBE_W_DESTINATION       decode_rd
 `define PROBE_W_DATA              writeback_data
-
-// ----  Probes  ----
-
 // ----  Top module  ----
 `define TOP_MODULE  pd4 
 // ----  Top module  ----
-
