@@ -18,20 +18,38 @@
  module branch_control #(
     parameter int DWIDTH=32
 )(
-    // inputs
+    //inputs
     input logic [6:0] opcode_i,
     input logic [2:0] funct3_i,
     input logic [DWIDTH-1:0] rs1_i,
     input logic [DWIDTH-1:0] rs2_i,
-    // outputs
+    //outputs
     output logic breq_o,
     output logic brlt_o
 );
+    
+    //signed comparison
+    logic signed [DWIDTH-1:0] rs1_signed;
+    logic signed [DWIDTH-1:0] rs2_signed;
 
-    /*
-     * Process definitions to be filled by
-     * student below...
-     */
+    //control flag
+    logic use_unsigned_compare;
+	
+    assign rs1_signed = rs1_i;
+    assign rs2_signed = rs2_i;
+
+    //comparison logic
+    always_comb begin
+        breq_o = (rs1_i == rs2_i);
+        use_unsigned_compare = (funct3_i == 3'b110) || (funct3_i == 3'b111);
+
+        if (use_unsigned_compare) begin
+            brlt_o = (rs1_i < rs2_i);
+        end else begin
+            brlt_o = (rs1_signed < rs2_signed);
+        end
+    end
 
 endmodule : branch_control
+
 
