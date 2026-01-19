@@ -1,273 +1,286 @@
 /*
  * Module: pd3
- * Description: Top level module for PD3. Instantiates fetch/decode/RF/EXU and drives probes.
+ *
+ * Description: Top level module that will contain sub-module instantiations.
+ *
+ * Inputs:
+ * 1) clk
+ * 2) reset signal
  */
-`include "constants.svh"
-`include "../probes.svh"  // +incdir includes design/, so this works
-
-// Include PD3 leaf modules here so we don't need to edit verif/scripts/design.f
-`include "register_file.sv"
-`include "execute.sv"
 
 module pd3 #(
     parameter int AWIDTH = 32,
-    parameter int DWIDTH = 32
-)(
-    input  logic clk,
-    input  logic reset
+    parameter int DWIDTH = 32)(
+    input logic clk,
+    input logic reset
 );
 
+    localparam logic [AWIDTH-1:0] MEM_BASE_ADDR = 32'h0100_0000;
+    localparam logic [AWIDTH-1:0] WORD_BYTES = {{(AWIDTH-3){1'b0}}, 3'd4};
 
-  // =======================
-  // FETCH
-  // =======================
-  logic [AWIDTH-1:0] f_pc;
-  logic [31:0]       f_insn;
-  logic [AWIDTH-1:0] imem_addr;
-  logic [31:0]       imem_rdata;
+    `ifndef LINE_COUNT
+        `define LINE_COUNT 1024
+    `endif
 
-  // Redirect controls from EXU
-  logic              redirect_taken;
-  logic [AWIDTH-1:0] redirect_target;
+    `ifndef MEM_PATH
+        `define MEM_PATH "test.x"
+    `endif
 
-  // Simple ROM for instructions (ok if unused by harness)
-  memory_rom IMEM(
-    .clk     (clk),
-    .addr_i  (imem_addr),
-    .rdata_o (imem_rdata)
-  );
+    typedef logic [DWIDTH-1:0] word_t;
 
-  fetch IF (
-    .clk            (clk),
-    .rst            (reset),
-    .take_branch_i  (redirect_taken),
-    .branch_target_i(redirect_target),
-    .imem_rdata_i   (imem_rdata),
-    .imem_addr_o    (imem_addr),
-    .pc_o           (f_pc),
-    .insn_o         (f_insn)
-  );
+    //fetch + Instruction memory
+    logic [AWIDTH-1:0] fetch_pc;
+    logic [DWIDTH-1:0] imem_data;
+    logic [DWIDTH-1:0] fetch_insn;
 
-  // =======================
-  // DECODE
-  // =======================
-  logic [6:0]  d_opcode;
-  logic [4:0]  d_rd, d_rs1, d_rs2, d_shamt;
-  logic [2:0]  d_funct3;
-  logic [6:0]  d_funct7;
+    fetch #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH),
+        .BASEADDR(MEM_BASE_ADDR)
+    ) fetch_inst (
+        .clk(clk),
+        .rst(reset),
+        .pc_o(fetch_pc),
+        .insn_o()
+    );
 
-  // =======================
-  // R-stage flops (fetch→decode→R)
-  // =======================
-    // =======================
-  // R-stage registers
-  // =======================
-   // =======================
-// R-stage flops (fetch→decode→R)
-// =======================
-logic [31:0] R_pc, R_imm_i, R_imm_u;
-logic [6:0]  R_opcode, R_funct7;
-logic [4:0]  R_rd, R_rs1, R_rs2;
-logic [2:0]  R_funct3;
-logic        R_is_branch, R_is_jal, R_is_jalr;
-logic        R_reg_write_en, R_mem_read, R_mem_write, R_use_imm;
-logic [3:0]  R_alu_sel;
+    memory #(
+        .AWIDTH(AWIDTH),
+        .DWIDTH(DWIDTH),
+        .BASE_ADDR(MEM_BASE_ADDR)
+    ) instr_mem (
+        .clk(clk),
+        .rst(reset),
+        .addr_i(fetch_pc),
+        .data_i('0),
+        .read_en_i(1'b1),
+        .write_en_i(1'b0),
+        .data_o(imem_data)
+    );
 
-always_ff @(posedge clk or posedge reset) begin
-  if (reset) begin
-    R_pc           <= '0;
-    R_opcode       <= '0;
-    R_rs1          <= '0;
-    R_rs2          <= '0;
-    R_rd           <= '0;
-    R_funct3       <= '0;
-    R_funct7       <= '0;
-    R_imm_i        <= '0;
-    R_imm_u        <= '0;
-    R_is_branch    <= 1'b0;
-    R_is_jal       <= 1'b0;
-    R_is_jalr      <= 1'b0;
-    R_reg_write_en <= 1'b0;
-    R_mem_read     <= 1'b0;
-    R_mem_write    <= 1'b0;
-    R_use_imm      <= 1'b0;
-    R_alu_sel      <= '0;
-  end else if (d_stage_valid) begin
-    // Capture new valid decode bundle directly
-    R_pc           <= f_pc;
-    R_opcode       <= d_opcode;
-    R_rs1          <= d_rs1;
-    R_rs2          <= d_rs2;
-    R_rd           <= d_rd;
-    R_funct3       <= d_funct3;
-    R_funct7       <= d_funct7;
-    R_imm_i        <= d_imm_i;
-    R_imm_u        <= d_imm_u;
-    R_is_branch    <= is_branch;
-    R_is_jal       <= is_jal;
-    R_is_jalr      <= is_jalr;
-    R_reg_write_en <= reg_write_en;
-    R_mem_read     <= mem_read;
-    R_mem_write    <= mem_write;
-    R_use_imm      <= use_imm;
-    R_alu_sel      <= alu_sel;
-  end
-end
+    assign fetch_insn = imem_data;
+
+    //decode stage
+    logic [AWIDTH-1:0] decode_pc;
+    logic [DWIDTH-1:0] decode_insn;
+    logic [6:0] decode_opcode;
+    logic [4:0] decode_rd;
+    logic [4:0] decode_rs1;
+    logic [4:0] decode_rs2;
+    logic [6:0] decode_funct7;
+    logic [2:0] decode_funct3;
+    logic [4:0] decode_shamt;
+    word_t decode_imm;
+
+    decode #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) decode_inst (
+        .clk(clk),
+        .rst(reset),
+        .insn_i(fetch_insn),
+        .pc_i(fetch_pc),
+        .pc_o(decode_pc),
+        .insn_o(decode_insn),
+        .opcode_o(decode_opcode),
+        .rd_o(decode_rd),
+        .rs1_o(decode_rs1),
+        .rs2_o(decode_rs2),
+        .funct7_o(decode_funct7),
+        .funct3_o(decode_funct3),
+        .shamt_o(decode_shamt),
+        .imm_o(decode_imm)
+    );
+
+    //control stage
+    logic pcsel;
+    logic immsel;
+    logic regwren;
+    logic rs1sel;
+    logic rs2sel;
+    logic memren;
+    logic memwren;
+    logic [1:0] wbsel;
+    logic [3:0] alusel;
+
+    control #(
+        .DWIDTH(DWIDTH)
+    ) control_inst (
+        .insn_i(decode_insn),
+        .opcode_i(decode_opcode),
+        .funct7_i(decode_funct7),
+        .funct3_i(decode_funct3),
+        .pcsel_o(pcsel),
+        .immsel_o(immsel),
+        .regwren_o(regwren),
+        .rs1sel_o(rs1sel),
+        .rs2sel_o(rs2sel),
+        .memren_o(memren),
+        .memwren_o(memwren),
+        .wbsel_o(wbsel),
+        .alusel_o(alusel)
+    );
+
+    //register file (signal declare)
+    word_t rf_rs1_data;
+    word_t rf_rs2_data;
+
+    //branch control
+    logic branch_eq;
+    logic branch_lt;
+
+    branch_control #(
+        .DWIDTH(DWIDTH)
+    ) branch_control_inst (
+        .opcode_i(decode_opcode),
+        .funct3_i(decode_funct3),
+        .rs1_i(rf_rs1_data),
+        .rs2_i(rf_rs2_data),
+        .breq_o(branch_eq),
+        .brlt_o(branch_lt)
+    );
 
 
+    //ALU operand selection
+    word_t alu_op_a;
+    word_t alu_op_b;
 
-  logic [31:0] d_imm_i, d_imm_s, d_imm_b, d_imm_u, d_imm_j;
-  wire [4:0] d_rs2_eff = (d_opcode == OPCODE_OP_IMM) ? d_rs1 : d_rs2;
-  logic [31:0] f_insn_q;
+    assign alu_op_a = rs1sel ? decode_pc : rf_rs1_data;
+    assign alu_op_b = immsel ? decode_imm : rf_rs2_data;
 
-// Hold fetched instruction until decode is valid
-always_ff @(posedge clk or posedge reset) begin
-  if (reset)
-    f_insn_q <= 32'b0;
-  else
-    f_insn_q <= f_insn;
-end
+    //execute (ALU)
+    word_t alu_result;
+    logic branch_taken;
 
+    alu #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) alu_inst (
+        .pc_i(decode_pc),
+        .rs1_i(alu_op_a),
+        .rs2_i(alu_op_b),
+        .funct3_i(decode_funct3),
+        .funct7_i(decode_funct7),
+        .opcode_i(decode_opcode),
+        .alusel_i(alusel),
+        .imm_i(decode_imm),
+        .breq_i(branch_eq),
+        .brlt_i(branch_lt),
+        .res_o(alu_result),
+        .brtaken_o(branch_taken)
+    );
 
+    //data memory (associative array)
+    word_t data_mem [logic [AWIDTH-1:0]];
 
-  decode ID (
-    .insn_i        (f_insn),
-    .opcode_o      (d_opcode),
-    .rd_o          (d_rd),
-    .funct3_o      (d_funct3),
-    .rs1_o         (d_rs1),
-    .rs2_o         (d_rs2),
-    .funct7_o      (d_funct7),
-    .imm_i_type_o  (d_imm_i),
-    .imm_s_type_o  (d_imm_s),
-    .imm_b_type_o  (d_imm_b),
-    .imm_u_type_o  (d_imm_u),
-    .imm_j_type_o  (d_imm_j),
-    .shamt_o       (d_shamt)
-  );
+    initial begin : init_data_mem
+        integer idx;
+        word_t init_words [0:`LINE_COUNT-1];
+        $readmemh(`MEM_PATH, init_words);
+        for (idx = 0; idx < `LINE_COUNT; idx++) begin
+            data_mem[MEM_BASE_ADDR + (idx * DWIDTH/8)] = init_words[idx];
+        end
+    end
 
-  // =======================
-  // CONTROL (lightweight)
-  // =======================
-  logic is_branch, is_jal, is_jalr;
-  logic reg_write_en, mem_read, mem_write, use_imm;
-  logic [3:0] alu_sel;
+    logic [AWIDTH-1:0] mem_addr;
+    logic [AWIDTH-1:0] mem_addr_aligned;
+    logic [1:0] mem_byte_offset;
+    logic mem_addr_valid;
+    word_t mem_word;
+    word_t load_data;
 
-  control CTRL (
-    .insn_i          (d_stage_valid ? f_insn_q : 32'b0),
-    .is_branch_o     (is_branch),
-    .is_jal_o        (is_jal),
-    .is_jalr_o       (is_jalr),
-    .reg_write_en_o  (reg_write_en),
-    .mem_read_o      (mem_read),
-    .mem_write_o     (mem_write),
-    .alu_sel_o       (alu_sel),
-    .use_imm_o       (use_imm)
-  );
+    assign mem_addr = alu_result;
+    assign mem_addr_aligned = {mem_addr[AWIDTH-1:2], 2'b00};
+    assign mem_byte_offset = mem_addr[1:0];
+    assign mem_addr_valid = !$isunknown(mem_addr_aligned);
 
-  // =======================
+    always_comb begin
+        if (!mem_addr_valid) begin
+            mem_word = '0;
+        end else if (data_mem.exists(mem_addr_aligned)) begin
+            mem_word = data_mem[mem_addr_aligned];
+        end else begin
+            mem_word = '0;
+        end
+    end
 
-  // =======================
-  // REGISTER FILE
-  // =======================
-  logic [DWIDTH-1:0] r_rs1data, r_rs2data;
-  logic [DWIDTH-1:0] wb_data;
-  logic              wb_wen;
+    always_comb begin
+        load_data = '0;
+        if (memren && mem_addr_valid) begin
+            int shift_bytes;
+            logic [7:0] byte_val;
+            logic [15:0] half_val;
+            shift_bytes = mem_byte_offset * 8;
+            byte_val = (mem_word >> shift_bytes) & 8'hFF;
+            half_val = mem_byte_offset[1] ? mem_word[31:16] : mem_word[15:0];
+            unique case (decode_funct3)
+                3'b000: load_data = {{24{byte_val[7]}}, byte_val};  //LB
+                3'b001: load_data = {{16{half_val[15]}}, half_val}; //LH
+                3'b010: load_data = mem_word;                       //LW
+                3'b100: load_data = {24'b0, byte_val};              //LBU
+                3'b101: load_data = {16'b0, half_val};              //LHU
+                default: load_data = mem_word;
+            endcase
+        end
+    end
 
-  assign wb_data = R_mem_read ? alu_res : alu_res;
+    always_ff @(posedge clk) begin
+        if (!reset && memwren && mem_addr_valid) begin
+            word_t current_word;
+            word_t updated_word;
+            int shift_bytes;
+            current_word = mem_word;
+            updated_word = current_word;
+            shift_bytes = mem_byte_offset * 8;
+            unique case (decode_funct3)
+                3'b000: begin // SB
+                    word_t byte_mask;
+                    byte_mask = ~(word_t'(32'hFF) << shift_bytes);
+                    updated_word = (current_word & byte_mask) | (word_t'({{24{1'b0}}, rf_rs2_data[7:0]}) << shift_bytes);
+                end
+                3'b001: begin // SH
+                    int shift_half;
+                    word_t half_mask;
+                    shift_half = mem_byte_offset[1] ? 16 : 0;
+                    half_mask = ~(word_t'(32'hFFFF) << shift_half);
+                    updated_word = (current_word & half_mask) | (word_t'({{16{1'b0}}, rf_rs2_data[15:0]}) << shift_half);
+                end
+                default: begin // SW
+                    updated_word = rf_rs2_data;
+                end
+            endcase
+            data_mem[mem_addr_aligned] = updated_word;
+        end
+    end
 
-  register_file RF (
-    .clk        (clk),
-    .rst        (reset),
-    .rs1_i      (d_rs1),
-    .rs2_i      (d_rs2_eff),
-    .rd_i       (R_rd),
-    .datawb_i   (wb_data),
-    .regwren_i  (R_reg_write_en),
-    .rs1data_o  (r_rs1data),
-    .rs2data_o  (r_rs2data)
-  );
+    //writeback selection
+    word_t pc_plus4;
+    word_t wb_data;
 
-  // =======================
-  // EXECUTE
-  // =======================
-  logic [DWIDTH-1:0] exu_rhs;
-  logic [DWIDTH-1:0] exu_lhs;
+    assign pc_plus4 = decode_pc + WORD_BYTES;
 
-  // LHS: LUI->0, AUIPC->R_pc, else rs1
-  assign exu_lhs = (R_opcode == OPCODE_LUI)   ? 32'b0 :
-                   (R_opcode == OPCODE_AUIPC) ? R_pc :
-                                               r_rs1data;
+    always_comb begin
+        unique case (wbsel)
+            2'b00: wb_data = alu_result;
+            2'b01: wb_data = load_data;
+            2'b10: wb_data = pc_plus4;
+            default: wb_data = alu_result;
+        endcase
+    end
 
-  // RHS: LUI/AUIPC use U-imm; OP-IMM uses I-imm; else rs2 or I-imm per R_use_imm
-  assign exu_rhs = (R_opcode == OPCODE_LUI || R_opcode == OPCODE_AUIPC) ? R_imm_u :
-                   (R_opcode == OPCODE_OP_IMM)                           ? R_imm_i :
-                   (R_use_imm ? R_imm_i : r_rs2data);
-
-  logic [DWIDTH-1:0] alu_core_res;
-  logic              br_core;
-
-  alu EXU (
-    .rs1_i     (exu_lhs),
-    .rs2_i     ((R_opcode == 7'b0010011) ? R_imm_i : exu_rhs),
-    .funct3_i  (R_funct3),
-    .funct7_i  (R_funct7),
-    .opcode_i  (R_opcode),
-    .res_o     (alu_core_res),
-    .brtaken_o (br_core)
-  );
-
-  // =======================
-  // Final ALU result / branch taken
-  // =======================
-  logic [DWIDTH-1:0] alu_res;
-  logic              br_taken;
-
-  always_comb begin
-    unique case (R_opcode)
-      OPCODE_LUI:    alu_res = R_imm_u;
-      OPCODE_AUIPC:  alu_res = R_pc + R_imm_u;
-      default:        alu_res = alu_core_res;
-    endcase
-  end
-
-  assign br_taken = (R_opcode == 7'b1100011) ? br_core : 1'b0;
-
-  // =======================
-  // One-cycle E-stage bubble after reset to match harness expectation
-  // =======================
-  logic e_stage_valid;
-  always_ff @(posedge clk or posedge reset) begin
-    if (reset) e_stage_valid <= 1'b0;
-    else       e_stage_valid <= 1'b1;
-  end
-
-  // =======================
-  // DEBUG / monitor signals for harness
-  // =======================
-  wire [31:0] F_PC            = f_pc;
-
-  wire [4:0]  R_READ_RS1      = R_rs1;
-  wire [4:0]  R_READ_RS2      = R_rs2;
-  wire [31:0] R_READ_RS1_DATA = r_rs1data;
-  wire [31:0] R_READ_RS2_DATA = r_rs2data;
-
-  wire [31:0] E_PC            = R_pc;
-  wire [31:0] E_ALU_RES       = e_stage_valid ? alu_res : R_pc;
-  wire        E_BR_TAKEN      = br_taken;
-
-  // =======================
-  // Additional DEBUG / monitor signals expected by harness
-  // =======================
-  wire [31:0] F_INSN   = f_insn;
-  wire [31:0] D_PC     = f_pc;
-  wire [6:0]  D_OPCODE = d_opcode;
-  wire [4:0]  D_RD     = d_rd;
-  wire [4:0]  D_RS1    = d_rs1;
-  wire [4:0]  D_RS2    = d_rs2;
-  wire [2:0]  D_FUNCT3 = d_funct3;
-  wire [6:0]  D_FUNCT7 = d_funct7;
-  wire [31:0] D_IMM    = (d_opcode == 7'b0010011) ? d_imm_i : d_imm_u;
-  wire [4:0]  D_SHAMT  = d_imm_i[4:0];
+    //register file with writeback connections
+    register_file #(
+        .DWIDTH(DWIDTH)
+    ) registers (
+        .clk(clk),
+        .rst(reset),
+        .rs1_i(decode_rs1),
+        .rs2_i(decode_rs2),
+        .rd_i(decode_rd),
+        .datawb_i(wb_data),
+        .regwren_i(regwren),
+        .rs1data_o(rf_rs1_data),
+        .rs2data_o(rf_rs2_data)
+    );
 
 endmodule : pd3
