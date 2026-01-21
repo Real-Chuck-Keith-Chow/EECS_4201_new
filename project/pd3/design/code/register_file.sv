@@ -1,3 +1,5 @@
+`include "constants.svh"
+
 /*
  * Module: register_file
  *
@@ -17,30 +19,40 @@
  * 2) 32-bit rs2 data rs2data_o
  */
 
-module register_file(
-  input  logic        clk_i,
-  input  logic        reset_i,
-  input  logic [4:0]  rs1_i,
-  input  logic [4:0]  rs2_i,
-  input  logic [4:0]  rd_i,
-  input  logic        regwren_i,
-  input  logic [31:0] datawb_i,
-  output logic [31:0] rs1_data_o,
-  output logic [31:0] rs2_data_o
-);
-  logic [31:0] regs [31:0];
-  integer i;
+ module register_file #(
+     parameter int DWIDTH=32
+ )(
+     // inputs
+     input logic clk,
+     input logic rst,
+     input logic [4:0] rs1_i,
+     input logic [4:0] rs2_i,
+     input logic [4:0] rd_i,
+     input logic [DWIDTH-1:0] datawb_i,
+     input logic regwren_i,
+     // outputs
+     output logic [DWIDTH-1:0] rs1data_o,
+     output logic [DWIDTH-1:0] rs2data_o
+ );
 
-  // Combinational reads
-  assign rs1_data_o = (rs1_i == 5'd0) ? 32'd0 : regs[rs1_i];
-  assign rs2_data_o = (rs2_i == 5'd0) ? 32'd0 : regs[rs2_i];
+    logic [DWIDTH-1:0] registers [0:31];
+    int i;
 
-  always_ff @(posedge clk_i) begin
-    if (reset_i) begin
-      for (i = 0; i < 32; i++) regs[i] <= 32'd0;
-      regs[5'd2] <= 32'h4000_0002;  // Seed x2
-    end else if (regwren_i && (rd_i != 5'd0)) begin
-      regs[rd_i] <= datawb_i;
+    always_ff @(posedge clk) begin
+        if (rst) begin
+            for (i = 0; i < 32; i++) begin
+                registers[i] <= '0;
+            end
+            registers[5'd2] <= SP_RESET;
+        end else if (regwren_i && (rd_i != 5'd0)) begin
+            registers[rd_i] <= datawb_i;
+        end
     end
-  end
-endmodule
+
+    always_comb begin
+        rs1data_o = (rs1_i == 5'd0) ? '0 : registers[rs1_i];
+        rs2data_o = (rs2_i == 5'd0) ? '0 : registers[rs2_i];
+    end
+
+endmodule : register_file
+
