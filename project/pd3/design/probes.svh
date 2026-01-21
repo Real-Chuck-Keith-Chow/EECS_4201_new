@@ -1,15 +1,30 @@
 // ----  Probes  ----
-`define PROBE_ADDR      f_pc      //connection where pc_o and addr_i meet
-`define PROBE_DATA_IN   data_i    //input for data in memory
-`define PROBE_DATA_OUT  data_o    //output for data in memory
-`define PROBE_READ_EN   read_en   
-`define PROBE_WRITE_EN  write_en  
+`define PROBE_F_PC                fetch_pc
+`define PROBE_F_INSN              fetch_insn
 
-`define PROBE_F_PC      f_pc    //input memory address/PC 
-`define PROBE_F_INSN    f_inst  //fetch_insn_o 
+`define PROBE_D_PC                decode_pc
+`define PROBE_D_OPCODE            decode_opcode
+`define PROBE_D_RD                decode_rd
+`define PROBE_D_FUNCT3            decode_funct3
+`define PROBE_D_RS1               decode_rs1
+`define PROBE_D_RS2               decode_rs2
+`define PROBE_D_FUNCT7            decode_funct7
+`define PROBE_D_IMM               decode_imm
+`define PROBE_D_SHAMT             decode_shamt
 
+`define PROBE_R_WRITE_ENABLE      regwren
+`define PROBE_R_WRITE_DESTINATION decode_rd
+`define PROBE_R_WRITE_DATA        wb_data
+`define PROBE_R_READ_RS1          decode_rs1
+`define PROBE_R_READ_RS2          decode_rs2
+`define PROBE_R_READ_RS1_DATA     rf_rs1_data
+`define PROBE_R_READ_RS2_DATA     rf_rs2_data
+
+`define PROBE_E_PC                decode_pc
+`define PROBE_E_ALU_RES           alu_result
+`define PROBE_E_BR_TAKEN          branch_taken
 // ----  Probes  ----
 
 // ----  Top module  ----
-`define TOP_MODULE  pd1
+`define TOP_MODULE  pd3
 // ----  Top module  ----
