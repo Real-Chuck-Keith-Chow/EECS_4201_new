@@ -1,0 +1,192 @@
+$date
+	Fri Nov  7 05:27:03 2025
+$end
+$version
+	ModelSim Version 2020.1
+$end
+$timescale
+	1ps
+$end
+
+$scope module memory_tb $end
+$var parameter 32 ! AWIDTH $end
+$var parameter 32 " DWIDTH $end
+$var parameter 32 # BASE_ADDR $end
+$var parameter 32 $ WORD_BYTES $end
+$var parameter 32 % MEM_BYTES $end
+$var parameter 32 & MEM_WORDS $end
+$var parameter 32 ' INIT_WORDS $end
+$var parameter 32 ( MEM_ADDR_MASK $end
+$var parameter 32 ) MEM_ADDR_MASK_INT $end
+$var wire 1 * clk $end
+$var wire 1 + rst $end
+$var wire 1 , addr_i [31] $end
+$var wire 1 - addr_i [30] $end
+$var wire 1 . addr_i [29] $end
+$var wire 1 / addr_i [28] $end
+$var wire 1 0 addr_i [27] $end
+$var wire 1 1 addr_i [26] $end
+$var wire 1 2 addr_i [25] $end
+$var wire 1 3 addr_i [24] $end
+$var wire 1 4 addr_i [23] $end
+$var wire 1 5 addr_i [22] $end
+$var wire 1 6 addr_i [21] $end
+$var wire 1 7 addr_i [20] $end
+$var wire 1 8 addr_i [19] $end
+$var wire 1 9 addr_i [18] $end
+$var wire 1 : addr_i [17] $end
+$var wire 1 ; addr_i [16] $end
+$var wire 1 < addr_i [15] $end
+$var wire 1 = addr_i [14] $end
+$var wire 1 > addr_i [13] $end
+$var wire 1 ? addr_i [12] $end
+$var wire 1 @ addr_i [11] $end
+$var wire 1 A addr_i [10] $end
+$var wire 1 B addr_i [9] $end
+$var wire 1 C addr_i [8] $end
+$var wire 1 D addr_i [7] $end
+$var wire 1 E addr_i [6] $end
+$var wire 1 F addr_i [5] $end
+$var wire 1 G addr_i [4] $end
+$var wire 1 H addr_i [3] $end
+$var wire 1 I addr_i [2] $end
+$var wire 1 J addr_i [1] $end
+$var wire 1 K addr_i [0] $end
+$var wire 1 L data_i [31] $end
+$var wire 1 M data_i [30] $end
+$var wire 1 N data_i [29] $end
+$var wire 1 O data_i [28] $end
+$var wire 1 P data_i [27] $end
+$var wire 1 Q data_i [26] $end
+$var wire 1 R data_i [25] $end
+$var wire 1 S data_i [24] $end
+$var wire 1 T data_i [23] $end
+$var wire 1 U data_i [22] $end
+$var wire 1 V data_i [21] $end
+$var wire 1 W data_i [20] $end
+$var wire 1 X data_i [19] $end
+$var wire 1 Y data_i [18] $end
+$var wire 1 Z data_i [17] $end
+$var wire 1 [ data_i [16] $end
+$var wire 1 \ data_i [15] $end
+$var wire 1 ] data_i [14] $end
+$var wire 1 ^ data_i [13] $end
+$var wire 1 _ data_i [12] $end
+$var wire 1 ` data_i [11] $end
+$var wire 1 a data_i [10] $end
+$var wire 1 b data_i [9] $end
+$var wire 1 c data_i [8] $end
+$var wire 1 d data_i [7] $end
+$var wire 1 e data_i [6] $end
+$var wire 1 f data_i [5] $end
+$var wire 1 g data_i [4] $end
+$var wire 1 h data_i [3] $end
+$var wire 1 i data_i [2] $end
+$var wire 1 j data_i [1] $end
+$var wire 1 k data_i [0] $end
+$var wire 1 l read_en_i $end
+$var wire 1 m write_en_i $end
+$var wire 1 n size_i [1] $end
+$var wire 1 o size_i [0] $end
+$var wire 1 p unsigned_load_i $end
+$var reg 32 q data_o [31:0] $end
+$var reg 32 r probe_data_o [31:0] $end
+$var integer 32 s i $end
+
+$scope begin #ublk#74032482#91 $end
+$var reg 2 t 0 [1:0] $end
+$upscope $end
+
+$scope begin #ublk#74032482#172 $end
+$var reg 2 u 1 [1:0] $end
+$upscope $end
+$upscope $end
+$enddefinitions $end
+#0
+$dumpvars
+b0 q
+b0 r
+b0 t
+bx u
+b100000 !
+b100000 "
+b1000000000000000000000000 #
+b100 $
+b1000000000000 %
+b10000000000 &
+b10000000000 '
+b111111111111 (
+b111111111111 )
+b10000000000 s
+z*
+z+
+zK
+zJ
+zI
+zH
+zG
+zF
+zE
+zD
+zC
+zB
+zA
+z@
+z?
+z>
+z=
+z<
+z;
+z:
+z9
+z8
+z7
+z6
+z5
+z4
+z3
+z2
+z1
+z0
+z/
+z.
+z-
+z,
+zk
+zj
+zi
+zh
+zg
+zf
+ze
+zd
+zc
+zb
+za
+z`
+z_
+z^
+z]
+z\
+z[
+zZ
+zY
+zX
+zW
+zV
+zU
+zT
+zS
+zR
+zQ
+zP
+zO
+zN
+zM
+zL
+zl
+zm
+zo
+zn
+zp
+$end
