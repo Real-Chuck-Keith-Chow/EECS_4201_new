@@ -1,0 +1,4 @@
+vcd file writeback_tb.vcd
+vcd add -r /writeback_tb/*
+run -all
+quit
