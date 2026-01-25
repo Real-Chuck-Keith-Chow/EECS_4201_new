@@ -1,0 +1,4 @@
+vcd file memory_tb.vcd
+vcd add -r /memory_tb/*
+run -all
+quit
