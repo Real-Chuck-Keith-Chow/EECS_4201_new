@@ -1,11 +1,11 @@
-constants.svh
+constants_pkg.sv
 memory.sv
 fetch.sv
 control.sv
 branch_control.sv
 decode.sv
-alu.sv
 igen.sv
 register_file.sv
 writeback.sv
+execute.sv
 pd4.sv
