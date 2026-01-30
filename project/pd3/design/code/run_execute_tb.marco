@@ -1,0 +1,4 @@
+vcd file register_file_tb.vcd
+vcd add -r /register_file_tb/*
+run -all
+quit
